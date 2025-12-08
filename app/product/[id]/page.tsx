@@ -2,7 +2,7 @@
 "use client";
 
 import { useUser } from "@/app/context/UserContext";
-import { ReactLenis } from '@studio-freight/react-lenis';
+import { ReactLenis } from 'lenis/react';
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ChevronLeft,
@@ -182,8 +182,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                                             key={finish}
                                             onClick={() => setSelectedFinish(finish)}
                                             className={`px-6 py-3 rounded-lg border transition-all text-sm ${selectedFinish === finish
-                                                    ? 'border-urban-terracotta bg-urban-terracotta text-white'
-                                                    : 'border-[#1A1714]/10 dark:border-white/10 hover:border-urban-terracotta/50'
+                                                ? 'border-urban-terracotta bg-urban-terracotta text-white'
+                                                : 'border-[#1A1714]/10 dark:border-white/10 hover:border-urban-terracotta/50'
                                                 }`}
                                         >
                                             {finish}

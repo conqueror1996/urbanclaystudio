@@ -2,7 +2,7 @@
 "use client";
 
 import { useUser } from "@/app/context/UserContext";
-import { ReactLenis } from '@studio-freight/react-lenis';
+import { ReactLenis } from 'lenis/react';
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Box,

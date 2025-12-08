@@ -9,7 +9,7 @@ import { FeedSection } from "@/lib/types";
 import { Settings2, Sparkles, Heart, Search, ArrowRight, UserCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { ReactLenis } from '@studio-freight/react-lenis'
+import { ReactLenis } from 'lenis/react';
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function DiscoverPage() {

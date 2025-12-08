@@ -1,7 +1,7 @@
 "use client";
 
 import { useUser } from "@/app/context/UserContext";
-import { ReactLenis } from '@studio-freight/react-lenis';
+import { ReactLenis } from 'lenis/react';
 import { motion } from "framer-motion";
 import {
     Users,
@@ -226,8 +226,8 @@ export default function SalesDashboard() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${lead.status === 'Hot' ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
-                                                            lead.status === 'Warm' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' :
-                                                                'bg-gray-100 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
+                                                        lead.status === 'Warm' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' :
+                                                            'bg-gray-100 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
                                                         }`}>
                                                         {lead.status}
                                                     </span>
@@ -313,8 +313,8 @@ function KPICard({ title, value, change, icon: Icon, trend }: any) {
                     <Icon className="w-5 h-5" />
                 </div>
                 <span className={`text-xs font-medium px-2 py-1 rounded-full ${trend === 'up' ? 'bg-green-100 text-green-600 dark:bg-green-500/10 dark:text-green-400' :
-                        trend === 'down' ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
-                            'bg-gray-100 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
+                    trend === 'down' ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
+                        'bg-gray-100 text-gray-600 dark:bg-gray-500/10 dark:text-gray-400'
                     }`}>
                     {change}
                 </span>
