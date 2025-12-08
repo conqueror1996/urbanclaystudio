@@ -20,11 +20,76 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 export default function WorkspacePage() {
     const { user, savedItems, removeItem, highTicketScore } = useUser();
     const [activeTab, setActiveTab] = useState<'moodboard' | 'specifications'>('moodboard');
+    const moodboardRef = useRef<HTMLDivElement>(null);
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleShare = async () => {
+        const shareData = {
+            title: `UrbanClay Moodboard - ${user?.projectLocation}`,
+            text: `Check out the material palette for the ${user?.architecturalStyle} project in ${user?.projectLocation}.`,
+            url: window.location.href,
+        };
+
+        try {
+            if (navigator.share) {
+                await navigator.share(shareData);
+            } else {
+                await navigator.clipboard.writeText(window.location.href);
+                alert("Link copied to clipboard!");
+            }
+        } catch (err) {
+            console.error('Error sharing:', err);
+        }
+    };
+
+    const handleExportPDF = async () => {
+        if (!moodboardRef.current) return;
+        setIsExporting(true);
+
+        try {
+            const canvas = await html2canvas(moodboardRef.current, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            // Add Watermark
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.save();
+                ctx.globalAlpha = 0.1;
+                ctx.font = 'bold 150px serif';
+                ctx.fillStyle = '#000000';
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(-45 * Math.PI / 180);
+                ctx.textAlign = 'center';
+                ctx.fillText('UrbanClay Studio', 0, 0);
+                ctx.restore();
+            }
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save(`urbanclay-moodboard-${user?.name.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+        } catch (err) {
+            console.error('PDF generation failed:', err);
+            alert("Failed to generate PDF. Please try again.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     if (!user) return null; // Should redirect in real app
 
@@ -96,7 +161,10 @@ export default function WorkspacePage() {
                             </h1>
                         </div>
                         <div className="flex items-center gap-3">
-                            <button className="flex items-center gap-2 px-4 py-2 border border-[#1A1714]/10 dark:border-white/10 rounded-full text-sm hover:bg-[#1A1714]/5 transition-colors">
+                            <button
+                                onClick={handleShare}
+                                className="flex items-center gap-2 px-4 py-2 border border-[#1A1714]/10 dark:border-white/10 rounded-full text-sm hover:bg-[#1A1714]/5 transition-colors"
+                            >
                                 <Share2 className="w-4 h-4" />
                                 <span className="hidden sm:inline">Share</span>
                             </button>
@@ -104,15 +172,19 @@ export default function WorkspacePage() {
                                 <Box className="w-4 h-4" />
                                 <span className="hidden sm:inline">Order Samples</span>
                             </Link>
-                            <button className="flex items-center gap-2 px-4 py-2 bg-urban-terracotta text-white rounded-full text-sm hover:bg-urban-terracotta-soft transition-colors shadow-lg shadow-urban-terracotta/20">
-                                <Download className="w-4 h-4" />
-                                <span className="hidden sm:inline">Export PDF</span>
+                            <button
+                                onClick={handleExportPDF}
+                                disabled={isExporting}
+                                className="flex items-center gap-2 px-4 py-2 bg-urban-terracotta text-white rounded-full text-sm hover:bg-urban-terracotta-soft transition-colors shadow-lg shadow-urban-terracotta/20 disabled:opacity-50"
+                            >
+                                <Download className={`w-4 h-4 ${isExporting ? 'animate-bounce' : ''}`} />
+                                <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export PDF'}</span>
                             </button>
                         </div>
                     </header>
 
                     {/* Content Views */}
-                    <div className="p-8 max-w-[1600px] mx-auto min-h-screen">
+                    <div ref={moodboardRef} className="p-8 max-w-[1600px] mx-auto min-h-screen bg-[#FDFDFD] dark:bg-[#1A1714]">
 
                         {/* Project Stats (Visible on all tabs) */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
