@@ -10,7 +10,7 @@ export const client = createClient({
   projectId,
   dataset,
   apiVersion,
-  useCdn: false, // We want fresh data for the AI feedback loop
+  useCdn: true, // Enable CDN for performance (reads)
   token: process.env.SANITY_API_TOKEN, // Required for write operations
 });
 

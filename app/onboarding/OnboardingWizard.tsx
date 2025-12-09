@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Check, ChevronRight, Loader2, Sparkles, RefreshCcw } from "lucide-react";
-import { generateArchitectureImage, uploadToSanity, getLatestGenerations } from "@/lib/sanity-utils";
+import { generateArchitectureImage, uploadToSanity, getLatestGenerations, getInspirationImages } from "@/lib/sanity-utils";
 import { cn } from "@/lib/utils";
 import {
     OnboardingData,
@@ -29,10 +29,12 @@ const INITIAL_DATA: OnboardingData = {
     role: "",
     businessName: "",
     email: "",
+    phoneNumber: "",
+    portfolioProjectTypes: [],
+    workingOnProject: true,
     projectLocation: "",
     projectStage: "",
     leadTime: "",
-    phoneNumber: "",
     interestedMaterials: [],
     colorPreference: "",
     architecturalStyle: "",
@@ -41,34 +43,84 @@ const INITIAL_DATA: OnboardingData = {
 
 export default function OnboardingWizard() {
     const [step, setStep] = useState(0);
+    const [direction, setDirection] = useState(0);
     const [data, setData] = useState<OnboardingData>(INITIAL_DATA);
     const [isGenerating, setIsGenerating] = useState(false);
     const [swipeItems, setSwipeItems] = useState<any[]>([]);
+    const [isLoadingSwipe, setIsLoadingSwipe] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
-        if (step === 5 && swipeItems.length === 0) {
-            getLatestGenerations(5).then(realItems => {
-                if (realItems && realItems.length > 0) {
-                    const formattedItems = realItems.map((item: any) => ({
-                        id: item._id,
-                        title: item.title,
-                        category: item.material || 'Architectural Element',
-                        tags: [item.style, item.projectType],
-                        imageUrl: item.imageUrl
-                    }));
-                    setSwipeItems(formattedItems);
-                }
-            }).catch(console.error);
+        // The swipe step is now step 3
+        if (step === 3 && swipeItems.length === 0 && !isLoadingSwipe) {
+            setIsLoadingSwipe(true);
+
+            // Use the NEW Match Logic
+            // In the new flow, interestedMaterials is not explicitly collected before swipe,
+            // so it will likely be empty. ArchitecturalStyle is collected in step 2.
+            const searchMaterials = data.interestedMaterials.length > 0 ? data.interestedMaterials : [];
+            const searchStyle = data.architecturalStyle || 'Modern Minimal';
+
+            getInspirationImages(searchMaterials, searchStyle)
+                .then(realItems => {
+                    const fallbackItems = [
+                        { id: 'f1', title: 'Rough Exposed Brick', category: 'Exposed Brick', color: '#8B4513', tags: ['Rustic', 'Textured'] },
+                        { id: 'f2', title: 'Smooth Terracotta Panel', category: 'Clay Facade', color: '#C25B37', tags: ['Modern', 'Smooth'] },
+                        { id: 'f3', title: 'Dark Grey Tile', category: 'Clay Tile', color: '#4A4A4A', tags: ['Contemporary', 'Minimal'] },
+                        { id: 'f4', title: 'Handmade Clay Paver', category: 'Brick Pavers', color: '#A0522D', tags: ['Heritage', 'Organic'] },
+                        { id: 'f5', title: 'Perforated Jali Layout', category: 'Terracotta Jali', color: '#E3D7C8', tags: ['Patterned', 'Open'] },
+                    ];
+
+                    if (realItems && realItems.length > 0) {
+                        const formattedItems = realItems.map((item: any) => ({
+                            id: item._id,
+                            title: item.title,
+                            category: item.material || 'Architectural Element',
+                            tags: [item.style, item.projectType].filter(Boolean), // Filter out nulls
+                            imageUrl: item.imageUrl
+                        }));
+                        setSwipeItems(formattedItems);
+                    } else {
+                        console.log("⚠️ No specific matches found in Catalog. Using Fallback.");
+                        setSwipeItems(fallbackItems);
+                    }
+                })
+                .catch(err => {
+                    console.error("Failed to retrieve inspiration", err);
+                    setSwipeItems([
+                        { id: 'e1', title: 'Rough Exposed Brick', category: 'Exposed Brick', color: '#8B4513', tags: ['Rustic', 'Textured'] },
+                        { id: 'e2', title: 'Smooth Terracotta Panel', category: 'Clay Facade', color: '#C25B37', tags: ['Modern', 'Smooth'] },
+                        { id: 'e3', title: 'Dark Grey Tile', category: 'Clay Tile', color: '#4A4A4A', tags: ['Contemporary', 'Minimal'] }
+                    ]);
+                })
+                .finally(() => {
+                    setIsLoadingSwipe(false);
+                });
         }
-    }, [step, swipeItems.length]);
+    }, [step, swipeItems.length, data.interestedMaterials, data.architecturalStyle]);
 
     const updateData = (fields: Partial<OnboardingData>) => {
         setData(prev => ({ ...prev, ...fields }));
     };
 
-    const nextStep = () => setStep(prev => prev + 1);
-    const prevStep = () => setStep(prev => Math.max(0, prev - 1));
+    const nextStep = () => {
+        setDirection(1);
+        // New skip logic for 'workingOnProject'
+        if (step === 1 && !data.workingOnProject) {
+            setStep(3); // Skip to Swipe View (Step 3)
+        } else {
+            setStep(prev => prev + 1);
+        }
+    };
+    const prevStep = () => {
+        setDirection(-1);
+        // New skip logic for 'workingOnProject'
+        if (step === 3 && !data.workingOnProject) {
+            setStep(1); // Back to Screen 2
+        } else {
+            setStep(prev => Math.max(0, prev - 1));
+        }
+    };
 
     const { setUser } = useUser();
 
@@ -80,33 +132,26 @@ export default function OnboardingWizard() {
         setUser(finalData); // Save to global context
         setIsGenerating(true);
 
+        const seedMetadata: any = {
+            projectType: finalData.projectType,
+            climate: 'Contextual',
+            lightingStyle: 'Golden Hour',
+            compositionStyle: 'Cinematic Wide',
+            textureLevel: 'High',
+            embeddingHint: `${finalData.architecturalStyle}, ${finalData.interestedMaterials[0]}, ${finalData.projectType}, cinematic lighting`
+        };
+
         try {
-            // Trigger 1-Click Generation customized to this user
-            const seedMetadata: any = {
-                title: `${finalData.projectType} for ${finalData.projectLocation}`,
-                description: `A custom generated ${finalData.architecturalStyle} project featuring ${finalData.interestedMaterials[0]}`,
-                style: finalData.architecturalStyle,
-                material: finalData.interestedMaterials[0] || 'Clay',
-                colorProfile: finalData.colorPreference,
-                projectType: finalData.projectType,
-                climate: 'Contextual',
-                lightingStyle: 'Golden Hour',
-                compositionStyle: 'Cinematic Wide',
-                textureLevel: 'High',
-                embeddingHint: `${finalData.architecturalStyle}, ${finalData.interestedMaterials[0]}, ${finalData.projectType}, cinematic lighting`
-            };
+            // FIRE-AND-FORGET: Trigger generation but don't block the user
+            // This runs in the background while the user is redirected to /discover
+            generateArchitectureImage(seedMetadata).then(imageUrl => {
+                uploadToSanity(imageUrl, seedMetadata).catch(console.error);
+            }).catch(console.error);
 
-            console.log("🚀 Triggering Onboarding Generation...", seedMetadata);
-
-            // Call the Server Action
-            const imageUrl = await generateArchitectureImage(seedMetadata);
-            await uploadToSanity(imageUrl, seedMetadata);
-
-            console.log("✅ Onboarding Generation Complete");
+            console.log("🚀 Triggered background curation");
 
         } catch (err) {
-            console.error("Onboarding Generation Failed:", err);
-            // Non-blocking error, user can still proceed to feed
+            console.error("Onboarding Trigger Failed:", err);
         }
 
         router.push('/discover');
@@ -116,21 +161,32 @@ export default function OnboardingWizard() {
     const isStepValid = () => {
         switch (step) {
             case 0:
-                // Name and Phone validation
+                // Screen 1: Name, Phone, Email, Profession
                 const isNameValid = data.name.length >= 2;
+                const isEmailValid = data.email.includes('@');
+                const isRoleValid = !!data.role;
                 const phoneDigits = data.phoneNumber.replace(/\D/g, '');
-                // Allow 10 digits (6-9 start) or 12 digits (91 start)
                 const isPhoneValid = (phoneDigits.length === 10 && /^[6-9]/.test(phoneDigits)) ||
                     (phoneDigits.length === 12 && phoneDigits.startsWith('91'));
-                return isNameValid && isPhoneValid;
-            case 1: return !!data.role; // Role
+
+                return isNameValid && isEmailValid && isRoleValid && isPhoneValid;
+
+            case 1:
+                // Screen 2: Company Name, Portfolio Projects, Working On Project
+                const isCompanyValid = data.businessName.length >= 2;
+                const isPortfolioValid = data.portfolioProjectTypes.length > 0;
+                return isCompanyValid && isPortfolioValid;
+
             case 2:
-                // Location validation (min 2 chars)
+                // Screen 3: Project Specifics (Only if workingOnProject is Yes)
+                if (!data.workingOnProject) return true;
                 const isLocationValid = data.projectLocation.length >= 2;
-                return isLocationValid && !!data.projectStage && !!data.leadTime;
-            case 3: return data.interestedMaterials.length > 0; // Materials
-            case 4: return !!data.colorPreference && !!data.architecturalStyle && !!data.projectType; // Style
-            case 5: return false; // Handled by SwipeView callback
+                const isStyleValid = !!data.architecturalStyle;
+                const isPTypeValid = !!data.projectType;
+
+                return isLocationValid && isStyleValid && isPTypeValid;
+
+            case 3: return false; // Handled by SwipeView callback
             default: return true;
         }
     };
@@ -140,21 +196,44 @@ export default function OnboardingWizard() {
             case 0:
                 return (
                     <div className="space-y-6">
-                        <h2 className="text-3xl font-light">Welcome to UrbanClay Studio.<br />Let’s personalize your experience.</h2>
-                        <div className="space-y-4 pt-8">
+                        <h2 className="text-3xl font-light text-white">Welcome to UrbanClay Studio.<br />Let’s get to know you.</h2>
+                        <div className="space-y-4 pt-4">
                             <div className="space-y-2">
-                                <label className="text-sm uppercase tracking-widest text-urban-stone">What should we call you?</label>
+                                <label className="text-sm uppercase tracking-widest text-white/50">Full Name</label>
                                 <input
                                     type="text"
                                     value={data.name}
                                     onChange={(e) => updateData({ name: e.target.value })}
-                                    className="w-full bg-transparent border-b border-urban-stone/30 py-4 text-2xl outline-none focus:border-urban-terracotta transition-colors placeholder:text-urban-stone/20"
-                                    placeholder="Your Name"
+                                    className="w-full bg-transparent border-b border-white/20 py-2 text-xl outline-none focus:border-urban-terracotta transition-colors placeholder:text-white/10 text-white"
+                                    placeholder="Enter your name"
                                     autoFocus
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm uppercase tracking-widest text-urban-stone">Phone Number</label>
+                                <label className="text-sm uppercase tracking-widest text-white/50">Profession</label>
+                                <select
+                                    value={data.role}
+                                    onChange={(e) => updateData({ role: e.target.value as Role })}
+                                    className="w-full bg-transparent border-b border-white/20 py-2 text-xl outline-none focus:border-urban-terracotta transition-colors text-white [&>option]:text-black"
+                                >
+                                    <option value="" disabled>Select your profession</option>
+                                    {ROLES.map(role => (
+                                        <option key={role} value={role}>{role}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm uppercase tracking-widest text-white/50">Email Address</label>
+                                <input
+                                    type="email"
+                                    value={data.email}
+                                    onChange={(e) => updateData({ email: e.target.value })}
+                                    className="w-full bg-transparent border-b border-white/20 py-2 text-xl outline-none focus:border-urban-terracotta transition-colors placeholder:text-white/10 text-white"
+                                    placeholder="name@company.com"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm uppercase tracking-widest text-white/50">Phone Number</label>
                                 <input
                                     type="tel"
                                     value={data.phoneNumber}
@@ -162,7 +241,7 @@ export default function OnboardingWizard() {
                                         const val = e.target.value.replace(/[^0-9+\-\s]/g, '');
                                         updateData({ phoneNumber: val });
                                     }}
-                                    className="w-full bg-transparent border-b border-urban-stone/30 py-4 text-2xl outline-none focus:border-urban-terracotta transition-colors placeholder:text-urban-stone/20"
+                                    className="w-full bg-transparent border-b border-white/20 py-2 text-xl outline-none focus:border-urban-terracotta transition-colors placeholder:text-white/10 text-white"
                                     placeholder="+91 98765 43210"
                                 />
                             </div>
@@ -171,246 +250,173 @@ export default function OnboardingWizard() {
                 );
             case 1:
                 return (
-                    <div className="space-y-6">
-                        <h2 className="text-3xl font-light">Which of the following best describes your role?</h2>
-                        <div className="grid gap-3 pt-4">
-                            {ROLES.map((role) => (
-                                <button
-                                    key={role}
-                                    onClick={() => updateData({ role })}
-                                    className={cn(
-                                        "text-left p-4 rounded-lg border transition-all duration-200",
-                                        data.role === role
-                                            ? "border-urban-terracotta bg-urban-terracotta/5 text-urban-terracotta"
-                                            : "border-urban-stone/20 hover:border-urban-stone/50 hover:bg-urban-stone/5"
-                                    )}
-                                >
-                                    <span className="text-lg font-light">{role}</span>
-                                </button>
-                            ))}
+                    <div className="space-y-8">
+                        <h2 className="text-3xl font-light text-white">Tell us about your work.</h2>
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm uppercase tracking-widest text-white/50">Company Name</label>
+                                <input
+                                    type="text"
+                                    value={data.businessName}
+                                    onChange={(e) => updateData({ businessName: e.target.value })}
+                                    className="w-full bg-transparent border-b border-white/20 py-2 text-xl outline-none focus:border-urban-terracotta transition-colors placeholder:text-white/10 text-white"
+                                    placeholder="Studio / Company Name"
+                                />
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="text-sm uppercase tracking-widest text-white/50">What type of projects do you work on?</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {PROJECT_TYPES.map(type => {
+                                        const isSelected = data.portfolioProjectTypes.includes(type);
+                                        return (
+                                            <button
+                                                key={type}
+                                                onClick={() => {
+                                                    const current = data.portfolioProjectTypes;
+                                                    const updated = isSelected
+                                                        ? current.filter(t => t !== type)
+                                                        : [...current, type];
+                                                    updateData({ portfolioProjectTypes: updated });
+                                                }}
+                                                className={cn(
+                                                    "px-4 py-2 rounded-full border text-sm transition-all",
+                                                    isSelected
+                                                        ? "bg-urban-terracotta text-white border-urban-terracotta"
+                                                        : "border-white/10 text-white/60 hover:border-white/30 hover:text-white"
+                                                )}
+                                            >
+                                                {type}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 pt-2">
+                                <label className="text-sm uppercase tracking-widest text-white/50">Are you working on a project right now?</label>
+                                <div className="flex gap-4">
+                                    {[true, false].map((val) => (
+                                        <button
+                                            key={String(val)}
+                                            onClick={() => updateData({ workingOnProject: val })}
+                                            className={cn(
+                                                "flex-1 py-3 border rounded-lg text-center transition-all",
+                                                data.workingOnProject === val
+                                                    ? "border-urban-terracotta bg-urban-terracotta/10 text-urban-terracotta ring-1 ring-urban-terracotta"
+                                                    : "border-white/10 text-white/60 hover:border-white/30"
+                                            )}
+                                        >
+                                            {val ? "Yes" : "No"}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );
             case 2:
                 return (
                     <div className="space-y-8">
-                        <h2 className="text-3xl font-light">Tell us about your project.</h2>
-
-                        <div className="space-y-2">
-                            <label className="text-sm uppercase tracking-widest text-urban-stone">Where is your project located?</label>
-                            <input
-                                type="text"
-                                value={data.projectLocation}
-                                onChange={(e) => updateData({ projectLocation: e.target.value })}
-                                className="w-full bg-transparent border-b border-urban-stone/30 py-2 text-xl outline-none focus:border-urban-terracotta transition-colors"
-                                placeholder="City, Country"
-                            />
+                        <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-widest text-urban-terracotta">Project Specifics</p>
+                            <h2 className="text-3xl font-light text-white">Let's tailor the recommendations.</h2>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm uppercase tracking-widest text-urban-stone">What stage is your project at?</label>
-                            <div className="flex flex-wrap gap-2">
-                                {STAGES.map(stage => (
-                                    <button
-                                        key={stage}
-                                        onClick={() => updateData({ projectStage: stage })}
-                                        className={cn(
-                                            "px-4 py-2 rounded-full border text-sm transition-all",
-                                            data.projectStage === stage
-                                                ? "bg-urban-terracotta text-white border-urban-terracotta"
-                                                : "border-urban-stone/30 hover:border-urban-stone text-urban-stone"
-                                        )}
-                                    >
-                                        {stage}
-                                    </button>
-                                ))}
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-sm uppercase tracking-widest text-white/50">Project Type</label>
+                                <div className="flex gap-2 overflow-x-auto pb-2">
+                                    {PROJECT_TYPES.map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => updateData({ projectType: type })}
+                                            className={cn(
+                                                "px-6 py-3 rounded-lg border whitespace-nowrap transition-all",
+                                                data.projectType === type
+                                                    ? "border-urban-terracotta bg-urban-terracotta/10 text-urban-terracotta"
+                                                    : "border-white/10 text-white/60 hover:border-white/30"
+                                            )}
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm uppercase tracking-widest text-urban-stone">When do you plan to begin or procure materials?</label>
-                            <div className="flex flex-wrap gap-2">
-                                {LEAD_TIMES.map(time => (
-                                    <button
-                                        key={time}
-                                        onClick={() => updateData({ leadTime: time })}
-                                        className={cn(
-                                            "px-4 py-2 rounded-full border text-sm transition-all",
-                                            data.leadTime === time
-                                                ? "bg-urban-terracotta text-white border-urban-terracotta"
-                                                : "border-urban-stone/30 hover:border-urban-stone text-urban-stone"
-                                        )}
-                                    >
-                                        {time}
-                                    </button>
-                                ))}
+                            <div className="space-y-2">
+                                <label className="text-sm uppercase tracking-widest text-white/50">Location</label>
+                                <input
+                                    type="text"
+                                    value={data.projectLocation}
+                                    onChange={(e) => updateData({ projectLocation: e.target.value })}
+                                    className="w-full bg-transparent border-b border-white/20 py-2 text-xl outline-none focus:border-urban-terracotta transition-colors placeholder:text-white/10 text-white"
+                                    placeholder="City, Country"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm uppercase tracking-widest text-white/50">Style Preference</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {['Modern', 'Rustic', 'Minimal', 'Vernacular'].map(style => (
+                                        <button
+                                            key={style}
+                                            onClick={() => updateData({ architecturalStyle: style })}
+                                            className={cn(
+                                                "px-4 py-3 rounded-lg border text-sm text-left transition-all",
+                                                data.architecturalStyle === style
+                                                    ? "border-urban-terracotta bg-urban-terracotta/10 text-urban-terracotta"
+                                                    : "border-white/10 text-white/60 hover:border-white/30"
+                                            )}
+                                        >
+                                            {style}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
                 );
+
             case 3:
-                return (
-                    <div className="space-y-6">
-                        <div className="space-y-1">
-                            <p className="text-xs uppercase tracking-widest text-urban-terracotta">Section 2</p>
-                            <h2 className="text-3xl font-light">Which clay-based materials are you exploring?</h2>
-                            <p className="text-urban-stone font-light">Select all that match your project</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4">
-                            {MATERIAL_OPTIONS.map((material) => {
-                                const isSelected = data.interestedMaterials.includes(material);
-                                return (
-                                    <button
-                                        key={material}
-                                        onClick={() => {
-                                            updateData({
-                                                interestedMaterials: isSelected
-                                                    ? data.interestedMaterials.filter(m => m !== material)
-                                                    : [...data.interestedMaterials, material]
-                                            });
-                                        }}
-                                        className={cn(
-                                            "flex items-center justify-between p-4 rounded-lg border transition-all",
-                                            isSelected
-                                                ? "border-urban-terracotta bg-urban-terracotta/5 text-urban-terracotta"
-                                                : "border-urban-stone/20 hover:border-urban-stone/50 hover:bg-urban-stone/5"
-                                        )}
-                                    >
-                                        <span className="text-lg font-light">{material}</span>
-                                        {isSelected && <Check className="w-5 h-5" />}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            case 4:
-                return (
-                    <div className="space-y-8">
-                        <div className="space-y-1">
-                            <p className="text-xs uppercase tracking-widest text-urban-terracotta">Section 3</p>
-                            <h2 className="text-3xl font-light">Refine your aesthetic</h2>
-                        </div>
-
-                        <div className="space-y-3">
-                            <label className="text-sm uppercase tracking-widest text-urban-stone">Color Direction</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {COLOR_OPTIONS.map(color => (
-                                    <button
-                                        key={color}
-                                        onClick={() => updateData({ colorPreference: color })}
-                                        className={cn(
-                                            "px-3 py-3 rounded-md border text-sm text-left transition-all",
-                                            data.colorPreference === color
-                                                ? "border-urban-terracotta bg-urban-terracotta/5 text-urban-terracotta"
-                                                : "border-urban-stone/20 hover:border-urban-stone"
-                                        )}
-                                    >
-                                        {color}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <label className="text-sm uppercase tracking-widest text-urban-stone">Architectural Mood</label>
-                            <div className="flex flex-wrap gap-2">
-                                {STYLE_OPTIONS.map(style => (
-                                    <button
-                                        key={style}
-                                        onClick={() => updateData({ architecturalStyle: style })}
-                                        className={cn(
-                                            "px-4 py-2 rounded-full border text-sm transition-all",
-                                            data.architecturalStyle === style
-                                                ? "bg-urban-terracotta text-white border-urban-terracotta"
-                                                : "border-urban-stone/30 hover:border-urban-stone text-urban-stone"
-                                        )}
-                                    >
-                                        {style}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <label className="text-sm uppercase tracking-widest text-urban-stone">Project Type</label>
-                            <div className="flex gap-4">
-                                {PROJECT_TYPES.map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => updateData({ projectType: type })}
-                                        className={cn(
-                                            "flex-1 py-4 border rounded-lg text-center transition-all",
-                                            data.projectType === type
-                                                ? "border-urban-terracotta bg-urban-terracotta/5 text-urban-terracotta"
-                                                : "border-urban-stone/20 hover:border-urban-stone"
-                                        )}
-                                    >
-                                        {type}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                );
-
-
-
-            // ... (rest of renderStep)
-
-            case 5:
                 return (
                     <div className="space-y-6 text-center">
                         {isGenerating ? (
                             <div className="py-20 flex flex-col items-center justify-center space-y-4">
                                 <Loader2 className="w-12 h-12 animate-spin text-urban-terracotta" />
-                                <p className="text-lg font-light animate-pulse">
+                                <p className="text-lg font-light animate-pulse text-white">
                                     Curating your customized material board...
                                 </p>
-                                <p className="text-xs text-urban-stone uppercase tracking-widest">Analyzing taste vector</p>
+                                <p className="text-xs text-white/40 uppercase tracking-widest">Analyzing taste vector</p>
+                            </div>
+                        ) : isLoadingSwipe ? (
+                            <div className="py-20 flex flex-col items-center justify-center space-y-4">
+                                <Loader2 className="w-12 h-12 animate-spin text-white/20" />
+                                <p className="text-lg font-light animate-pulse text-white">
+                                    Finding inspiration for you...
+                                </p>
                             </div>
                         ) : (
                             <>
                                 <div className="space-y-1 mb-8">
-                                    <p className="text-xs uppercase tracking-widest text-urban-terracotta">Section 4</p>
-                                    <h2 className="text-3xl font-light">Taste Refinement</h2>
-                                    <p className="text-urban-stone font-light px-8">Swipe Right if it matches your vision. Swipe Left if it doesn't.</p>
+                                    <p className="text-xs uppercase tracking-widest text-urban-terracotta">Final Step</p>
+                                    <h2 className="text-3xl font-light text-white">Taste Refinement</h2>
+                                    <p className="text-white/50 font-light px-8">Swipe Right if it matches your vision</p>
                                 </div>
                                 <SwipeView onComplete={handleSwipeComplete} items={swipeItems} />
                             </>
-                        )
-                        }
+                        )}
                     </div >
                 );
-            case 6:
+            case 4:
                 return (
                     <div className="space-y-8">
                         <div className="text-center space-y-2">
                             <Sparkles className="w-8 h-8 text-urban-terracotta mx-auto mb-4" />
-                            <h2 className="text-3xl font-light">Your Curated Collection</h2>
-                            <p className="text-urban-stone">Based on your preferences for {data.architecturalStyle} {data.projectType}</p>
+                            <h2 className="text-3xl font-light text-white">Your Curated Collection</h2>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Simulated Curated Grid */}
-                            {[...Array(4)].map((_, i) => (
-                                <div key={i} className="aspect-square bg-urban-stone/10 rounded-lg overflow-hidden relative group">
-                                    <div className="absolute inset-0 bg-gradient-to-br from-urban-terracotta/20 to-urban-charcoal/10" />
-                                    <div className="absolute bottom-2 left-2 right-2 p-2 bg-white/90 dark:bg-black/80 backdrop-blur-sm rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {data.interestedMaterials[i % data.interestedMaterials.length] || "Material"}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
                         <div className="pt-4 text-center">
-                            <button
-                                onClick={() => handleSwipeComplete(data.tasteVector)}
-                                className="inline-flex items-center gap-2 text-urban-terracotta hover:underline text-sm uppercase tracking-widest"
-                            >
-                                <RefreshCcw className="w-4 h-4" />
-                                Regenerate Options
-                            </button>
+                            <p>Redirecting to Discover...</p>
                         </div>
                     </div>
                 )
@@ -422,13 +428,14 @@ export default function OnboardingWizard() {
     return (
         <div className="min-h-screen flex flex-col max-w-2xl mx-auto px-6 py-12 justify-center">
             <div className="flex-1 flex flex-col justify-center">
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" custom={direction}>
                     <motion.div
                         key={step}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        custom={direction}
+                        initial={{ x: direction > 0 ? 40 : -40, opacity: 0, filter: "blur(10px)" }}
+                        animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
+                        exit={{ x: direction > 0 ? -40 : 40, opacity: 0, filter: "blur(10px)" }}
+                        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                         className="w-full"
                     >
                         {renderStep()}
@@ -437,31 +444,31 @@ export default function OnboardingWizard() {
             </div>
 
             <div className="pt-8 flex justify-between items-center bg-transparent relative z-10">
-                {step > 0 && step < 6 && !isGenerating && (
+                {step > 0 && step < 4 && !isGenerating && ( // Adjusted step condition for 'Back' button
                     <button
                         onClick={prevStep}
-                        className="text-urban-stone hover:text-urban-charcoal dark:hover:text-urban-white text-sm uppercase tracking-widest transition-colors"
+                        className="text-white/40 hover:text-white text-sm uppercase tracking-widest transition-colors"
                     >
                         Back
                     </button>
                 )}
 
                 <div className="ml-auto">
-                    {/* Step 5 (Swipe) handles its own Next, Step 6 is end */}
-                    {isStepValid() && step !== 5 && step !== 6 && (
+                    {/* Step 3 (Swipe) handles its own Next logic or hides button */}
+                    {isStepValid() && step !== 3 && step !== 4 && ( // Adjusted step condition for 'Next' button
                         <button
                             onClick={nextStep}
-                            className="group flex items-center gap-2 bg-urban-charcoal text-white dark:bg-urban-white dark:text-urban-charcoal px-6 py-3 rounded-full transition-all hover:scale-105 active:scale-95"
+                            className="group flex items-center gap-2 bg-white text-black px-6 py-3 rounded-full transition-all hover:bg-urban-terracotta hover:text-white hover:scale-105 active:scale-95 shadow-lg"
                         >
                             <span>Next</span>
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </button>
                     )}
 
-                    {!isStepValid() && step !== 5 && step !== 6 && (
+                    {!isStepValid() && step !== 3 && step !== 4 && ( // Adjusted step condition for disabled 'Next' button
                         <button
                             disabled
-                            className="flex items-center gap-2 bg-urban-stone/20 text-urban-stone px-6 py-3 rounded-full cursor-not-allowed"
+                            className="flex items-center gap-2 bg-white/10 text-white/20 px-6 py-3 rounded-full cursor-not-allowed border border-white/5"
                         >
                             <span>Next</span>
                             <ArrowRight className="w-4 h-4" />
@@ -471,12 +478,12 @@ export default function OnboardingWizard() {
             </div>
 
             {/* Progress Indicator */}
-            {step < 6 && (
-                <div className="absolute top-0 left-0 w-full h-1 bg-urban-stone/10">
+            {step < 4 && ( // Adjusted total steps for progress indicator
+                <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
                     <motion.div
-                        className="h-full bg-urban-terracotta"
+                        className="h-full bg-urban-terracotta shadow-[0_0_10px_rgba(166,93,61,0.5)]"
                         initial={{ width: "0%" }}
-                        animate={{ width: `${((step + 1) / 6) * 100}%` }}
+                        animate={{ width: `${((step + 1) / 4) * 100}%` }}
                     />
                 </div>
             )}

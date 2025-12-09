@@ -12,6 +12,8 @@ interface UserContextType {
     savedItems: any[];
     saveItem: (item: any) => void;
     removeItem: (id: string) => void;
+    activityLog: { id: string, action: string, detail: string, timestamp: number }[];
+    logActivity: (action: string, detail: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -19,13 +21,16 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<OnboardingData | null>(null);
     const [highTicketScore, setHighTicketScore] = useState(0);
-
     const [savedItems, setSavedItems] = useState<any[]>([]);
+
+    // NEW: Activity Log for Sales Intelligence
+    const [activityLog, setActivityLog] = useState<{ id: string, action: string, detail: string, timestamp: number }[]>([]);
 
     // Initial load from local storage if available (client-side only)
     useEffect(() => {
         const savedUser = localStorage.getItem('urbanclay_user');
         const savedCollection = localStorage.getItem('urbanclay_saved_items');
+        const savedActivity = localStorage.getItem('urbanclay_activity_log');
 
         if (savedUser) {
             setUser(JSON.parse(savedUser));
@@ -33,7 +38,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (savedCollection) {
             setSavedItems(JSON.parse(savedCollection));
         } else {
-            // Mock some initial saved items for the demo if empty
+            // Mock items... (existing code)
             setSavedItems([
                 {
                     id: 'mock-1',
@@ -46,6 +51,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 }
             ]);
         }
+        if (savedActivity) {
+            setActivityLog(JSON.parse(savedActivity));
+        }
     }, []);
 
     // Save to local storage whenever user updates
@@ -53,15 +61,46 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (user) {
             localStorage.setItem('urbanclay_user', JSON.stringify(user));
 
-            // Calculate High Ticket Score based on role & project
+            // Calculate High Ticket Score based on role & project AND Activity
             let score = 0;
+
+            // 1. Static Profile Score
             if (user.role === 'Architect' || user.role === 'Builder') score += 30;
-            if (user.projectType === 'Commercial') score += 20;
-            if (user.leadTime === 'Immediately') score += 20;
-            if (user.projectStage === 'Execution') score += 20;
-            setHighTicketScore(score);
+
+            // Portfolio Value (Commercial/Industrial implies higher ticket)
+            if (user.portfolioProjectTypes?.includes('Commercial') || user.portfolioProjectTypes?.includes('Industrial')) {
+                score += 15;
+            }
+
+            // Active Project Intent
+            if (user.workingOnProject) {
+                score += 25; // High intent
+                // Bonus for rigorous project details
+                if (user.projectStage === 'Execution') score += 10;
+                if (user.projectType === 'Commercial') score += 10;
+            }
+
+            // Dynamic Activity Score (Capped at 50)
+            const activityScore = Math.min(50, (savedItems.length * 5) + (activityLog.length * 2));
+
+            setHighTicketScore(Math.min(100, score + activityScore));
         }
-    }, [user]);
+    }, [user, savedItems, activityLog]);
+
+    // Persist Log
+    useEffect(() => {
+        localStorage.setItem('urbanclay_activity_log', JSON.stringify(activityLog));
+    }, [activityLog]);
+
+    const logActivity = (action: string, detail: string) => {
+        const newLog = {
+            id: Math.random().toString(36).substr(2, 9),
+            action,
+            detail,
+            timestamp: Date.now()
+        };
+        setActivityLog(prev => [newLog, ...prev]);
+    };
 
     // Save collection to local storage
     useEffect(() => {
@@ -85,7 +124,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <UserContext.Provider value={{ user, setUser, highTicketScore, refineTaste, savedItems, saveItem, removeItem }}>
+        <UserContext.Provider value={{ user, setUser, highTicketScore, refineTaste, savedItems, saveItem, removeItem, activityLog, logActivity }}>
             {children}
         </UserContext.Provider>
     );

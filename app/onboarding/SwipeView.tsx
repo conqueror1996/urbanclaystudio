@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, useMotionValue, useTransform, AnimatePresence, PanInfo } from "framer-motion";
-import { Check, X, Loader2 } from "lucide-react";
+import { Check, X, Loader2, Heart } from "lucide-react";
 
 interface MaterialCard {
     id: string;
@@ -30,14 +30,15 @@ const triggerHaptic = () => {
 };
 
 export default function SwipeView({ onComplete, items }: { onComplete: (vector: any) => void, items?: MaterialCard[] }) {
-    // Initialize with items if provided, else use MOCK_CARDS
-    const [cards, setCards] = useState(items && items.length > 0 ? items : MOCK_CARDS);
+    // Initialize with items only - NO MOCKS
+    const [cards, setCards] = useState<MaterialCard[]>(items || []);
     const [swipedCount, setSwipedCount] = useState(0);
-    const [totalCards, setTotalCards] = useState(items && items.length > 0 ? items.length : MOCK_CARDS.length);
+    const [totalCards, setTotalCards] = useState(items ? items.length : 0);
 
     // Sync state if items prop changes (e.g. after async fetch)
     useEffect(() => {
-        if (items && items.length > 0) {
+        // If items are provided (even if empty array), sync them.
+        if (items) {
             setCards(items);
             setTotalCards(items.length);
             setSwipedCount(0);
@@ -66,15 +67,15 @@ export default function SwipeView({ onComplete, items }: { onComplete: (vector: 
         <div className="relative w-full h-[600px] flex flex-col items-center justify-center overflow-hidden touch-none select-none">
             {/* Progress Indicator - Minimal & Smooth */}
             <div className="absolute top-4 z-0 w-full flex justify-center items-center gap-2">
-                <div className="w-[80%] h-1 bg-urban-stone/20 rounded-full overflow-hidden">
+                <div className="w-[80%] h-1 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
                     <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(swipedCount / totalCards) * 100}%` }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="h-full bg-urban-terracotta"
+                        className="h-full bg-gradient-to-r from-urban-terracotta to-purple-500"
                     />
                 </div>
-                <span className="text-xs font-serif italic text-urban-stone">{swipedCount}/{totalCards}</span>
+                <span className="text-xs font-serif italic text-white/40">{swipedCount}/{totalCards}</span>
             </div>
 
             <AnimatePresence>
@@ -97,18 +98,18 @@ export default function SwipeView({ onComplete, items }: { onComplete: (vector: 
                 <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="text-center p-8 bg-white/5 backdrop-blur rounded-2xl border border-white/10"
+                    className="text-center p-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/5 shadow-2xl"
                 >
                     <Loader2 className="w-8 h-8 text-urban-terracotta animate-spin mx-auto mb-4" />
-                    <h3 className="text-xl font-serif text-urban-terracotta mb-2">Refining Profile</h3>
-                    <p className="text-sm text-urban-stone">Calibrating your aesthetic...</p>
+                    <h3 className="text-xl font-display text-white mb-2">Refining Taste Profile</h3>
+                    <p className="text-sm text-white/40">Curating your bespoke collection...</p>
                 </motion.div>
             )}
 
             {/* Hint Controls (Mobile Friendly) */}
-            <div className="absolute bottom-8 flex gap-8 items-center text-urban-stone/50 text-sm font-medium z-0">
-                <span className="flex items-center gap-2"><X className="w-4 h-4" /> No</span>
-                <span className="flex items-center gap-2">Yes <Check className="w-4 h-4" /></span>
+            <div className="absolute bottom-8 flex gap-8 items-center text-white/30 text-xs tracking-widest uppercase font-medium z-0">
+                <span className="flex items-center gap-2"><X className="w-4 h-4" /> Discard</span>
+                <span className="flex items-center gap-2">Keep <Check className="w-4 h-4" /></span>
             </div>
         </div>
     );
@@ -121,7 +122,7 @@ const CardStackItem = ({ index, total }: { index: number, total: number }) => {
 
     return (
         <motion.div
-            className="absolute bg-white dark:bg-[#1A1714] rounded-[24px] shadow-2xl border border-white/10"
+            className="absolute bg-black/80 backdrop-blur-md rounded-[24px] shadow-2xl border border-white/5"
             style={{
                 width: 340,
                 height: 480,
@@ -171,40 +172,40 @@ function Card({ card, onSwipe }: { card: MaterialCard, onSwipe: (dir: 'left' | '
             dragElastic={0.6} // Rubber band effect
             onDragEnd={handleDragEnd}
             whileTap={{ cursor: "grabbing", scale: 1.02 }}
-            className="absolute top-12 w-[340px] h-[480px] bg-white dark:bg-[#1A1714] rounded-[24px] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] cursor-grab border border-white/10 overflow-hidden flex flex-col group touch-action-none"
+            className="absolute top-12 w-[340px] h-[480px] bg-black rounded-[24px] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] cursor-grab border border-white/10 overflow-hidden flex flex-col group touch-action-none ring-1 ring-white/5"
         >
             {/* Image Area */}
             <div
                 className="flex-1 w-full relative bg-cover bg-center transition-transform duration-500"
                 style={{
-                    backgroundColor: card.color || '#2A2622',
+                    backgroundColor: card.color || '#0F0F0F',
                     backgroundImage: card.imageUrl ? `url(${card.imageUrl})` : undefined
                 }}
             >
-                <div className="absolute inset-0 bg-gradient-to-t from-[#1A1714] via-transparent to-transparent opacity-90" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
 
                 {/* Overlay Feedback - Yes / No */}
-                <motion.div style={{ opacity: leftOpacity }} className="absolute inset-0 bg-red-500/20 backdrop-blur-sm flex items-center justify-center z-10 transition-colors">
-                    <motion.div style={{ scale: iconScale }} className="bg-red-500 text-white rounded-full p-6 shadow-xl">
-                        <X className="w-12 h-12 stroke-[3]" />
+                <motion.div style={{ opacity: leftOpacity }} className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-10 transition-colors">
+                    <motion.div style={{ scale: iconScale }} className="border-2 border-white/20 bg-black/50 text-white/90 rounded-full p-6 shadow-2xl backdrop-blur-md">
+                        <X className="w-10 h-10 stroke-[2]" />
                     </motion.div>
                 </motion.div>
 
-                <motion.div style={{ opacity: rightOpacity }} className="absolute inset-0 bg-green-500/20 backdrop-blur-sm flex items-center justify-center z-10 transition-colors">
-                    <motion.div style={{ scale: iconScale }} className="bg-green-500 text-white rounded-full p-6 shadow-xl">
-                        <Check className="w-12 h-12 stroke-[3]" />
+                <motion.div style={{ opacity: rightOpacity }} className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-10 transition-colors">
+                    <motion.div style={{ scale: iconScale }} className="border-2 border-urban-terracotta/50 bg-urban-terracotta/20 text-urban-terracotta rounded-full p-6 shadow-2xl backdrop-blur-md">
+                        <Heart className="w-10 h-10 stroke-[2] fill-current" />
                     </motion.div>
                 </motion.div>
 
                 {/* Content */}
                 <div className="absolute bottom-8 left-8 right-8 text-white z-20 pointer-events-none">
-                    <div className="inline-flex items-center gap-2 mb-3">
-                        <span className="px-3 py-1 bg-white/10 backdrop-blur border border-white/20 rounded-full text-[10px] uppercase tracking-widest font-medium">
+                    <div className="inline-flex items-center gap-2 mb-4">
+                        <span className="px-3 py-1 bg-black/40 backdrop-blur-md border border-white/10 rounded-full text-[10px] uppercase tracking-widest font-medium text-white/80">
                             {card.tags[0] || 'Material'}
                         </span>
                     </div>
-                    <h3 className="text-3xl font-serif leading-tight mb-1">{card.title}</h3>
-                    <p className="text-sm text-urban-stone font-light line-clamp-2">{card.category}</p>
+                    <h3 className="text-3xl font-display font-light leading-none mb-2 tracking-wide text-gray-100">{card.title}</h3>
+                    <p className="text-sm text-gray-400 font-light line-clamp-2 tracking-wide">{card.category}</p>
                 </div>
             </div>
         </motion.div>

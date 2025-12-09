@@ -9,18 +9,22 @@ export interface OnboardingData {
     role: Role | '';
     businessName: string;
     email: string;
-    projectLocation: string;
-    projectStage: ProjectStage | '';
-    leadTime: LeadTime | '';
     phoneNumber: string;
 
-    // Section 2: Materials
-    interestedMaterials: string[];
+    // Section 2: Professional Profile
+    portfolioProjectTypes: string[];
+    workingOnProject: boolean;
 
-    // Section 3: Style
-    colorPreference: string;
+    // Section 3: Current Project (if workingOnProject is true)
+    projectLocation: string;
+    projectStage: ProjectStage | ''; // Optional or inferred
+    projectType: ProjectType | ''; // Current specific project
     architecturalStyle: string;
-    projectType: ProjectType | '';
+
+    // Legacy / Other
+    leadTime: LeadTime | '';
+    interestedMaterials: string[]; // Might be inferred or asked later
+    colorPreference: string;
 
     // Section 4: Taste Vector
     tasteVector?: any;
@@ -97,3 +101,28 @@ export interface SavedItem extends FeedItem {
     notes?: string;
 }
 
+export interface MoodboardItem {
+    id: string;
+    type: 'material' | 'image' | 'swatch' | 'note';
+    src?: string; // For images/materials
+    color?: string; // For swatches
+    text?: string; // For notes/labels
+    name?: string;
+    variant?: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+    zIndex: number;
+    locked: boolean;
+    metadata?: any;
+}
+
+export interface MoodboardBoard {
+    id: string;
+    name: string;
+    items: MoodboardItem[];
+    createdAt: number;
+    updatedAt: number;
+}
